@@ -24,14 +24,22 @@ class OfflineOrderRefundService
         private readonly DomainEventDispatcherService $domainEventDispatcherService,
     ) {}
 
-    public function refundOrder(OrderDomainObject $order, MoneyValue $amount): void
-    {
+    /**
+     * Records a refund that has already happened (offline, or confirmed
+     * synchronously by a gateway such as Tap) and updates the order totals.
+     */
+    public function refundOrder(
+        OrderDomainObject $order,
+        MoneyValue $amount,
+        PaymentProviders $provider = PaymentProviders::OFFLINE,
+        ?string $refundId = null,
+    ): void {
         $refundedAmount = $amount->toFloat();
 
         $this->orderRefundRepository->create([
             'order_id' => $order->getId(),
-            'payment_provider' => PaymentProviders::OFFLINE->value,
-            'refund_id' => 'offline_'.Str::uuid()->toString(),
+            'payment_provider' => $provider->value,
+            'refund_id' => $refundId ?? 'offline_'.Str::uuid()->toString(),
             'amount' => $refundedAmount,
             'currency' => $order->getCurrency(),
             'status' => 'succeeded',

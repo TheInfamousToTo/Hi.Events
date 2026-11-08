@@ -9,6 +9,8 @@ use HiEvents\Repository\Interfaces\OrderRepositoryInterface;
 use HiEvents\Services\Application\Handlers\Order\DTO\RefundOrderDTO;
 use HiEvents\Services\Application\Handlers\Order\Payment\Offline\RefundOfflineOrderHandler;
 use HiEvents\Services\Application\Handlers\Order\Payment\Stripe\RefundOrderHandler as RefundStripeOrderHandler;
+use HiEvents\Services\Application\Handlers\Order\Payment\Tap\RefundTapOrderHandler;
+use HiEvents\DomainObjects\Enums\PaymentProviders;
 use Symfony\Component\Routing\Exception\ResourceNotFoundException;
 use Throwable;
 
@@ -18,6 +20,7 @@ class RefundOrderHandler
         private readonly OrderRepositoryInterface $orderRepository,
         private readonly RefundStripeOrderHandler $refundStripeOrderHandler,
         private readonly RefundOfflineOrderHandler $refundOfflineOrderHandler,
+        private readonly RefundTapOrderHandler $refundTapOrderHandler,
     ) {}
 
     /**
@@ -36,6 +39,10 @@ class RefundOrderHandler
                 'id' => $refundOrderDTO->order_id,
                 'eventId' => $refundOrderDTO->event_id,
             ]));
+        }
+
+        if ($order->getPaymentProvider() === PaymentProviders::TAP->value) {
+            return $this->refundTapOrderHandler->handle($refundOrderDTO);
         }
 
         if ($order->isPaidOutsidePlatform()) {

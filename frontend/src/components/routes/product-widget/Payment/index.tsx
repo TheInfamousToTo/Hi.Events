@@ -1,11 +1,12 @@
 import React, {useState} from "react";
-import {useNavigate, useParams} from "react-router";
+import {useNavigate, useParams, useSearchParams} from "react-router";
 import {CheckoutContent} from "../../../layouts/Checkout/CheckoutContent";
 import {CheckoutStepTitle} from "../../../layouts/Checkout/CheckoutStepTitle";
 import {StripePaymentMethod} from "./PaymentMethods/Stripe";
 import {OfflinePaymentMethod} from "./PaymentMethods/Offline";
 import {Button, Group, Text} from "@mantine/core";
-import {IconBuildingBank, IconLock, IconWallet} from "@tabler/icons-react";
+import {IconBuildingBank, IconCreditCard, IconLock, IconWallet} from "@tabler/icons-react";
+import {orderClientPublic} from "../../../../api/order.client.ts";
 import {formatCurrency} from "../../../../utilites/currency.ts";
 import {t, Trans} from "@lingui/macro";
 import {useGetOrderPublic} from "../../../../queries/useGetOrderPublic.ts";
@@ -34,7 +35,9 @@ const Payment = () => {
     const isLoading = !isOrderFetched;
     const checkoutEvent = order?.event;
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
-    const [activePaymentMethod, setActivePaymentMethod] = useState<'STRIPE' | 'OFFLINE' | null>(null);
+    const [activePaymentMethod, setActivePaymentMethod] = useState<'STRIPE' | 'OFFLINE' | 'TAP' | null>(null);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [isVerifyingTap, setIsVerifyingTap] = useState(false);
     const [submitHandler, setSubmitHandler] = useState<(() => Promise<void>) | null>(null);
     const transitionOrderToOfflinePaymentMutation = useTransitionOrderToOfflinePaymentPublic();
     const paymentLinkModal = usePaymentLinkModal();
@@ -49,17 +52,64 @@ const Payment = () => {
 
     const isStripeEnabled = checkoutEvent?.settings?.payment_providers?.includes('STRIPE');
     const isOfflineEnabled = checkoutEvent?.settings?.payment_providers?.includes('OFFLINE');
+    const isTapEnabled = checkoutEvent?.settings?.payment_providers?.includes('TAP');
     const isPayingLater = activePaymentMethod === 'OFFLINE';
+    const enabledMethodCount = [isStripeEnabled, isTapEnabled, isOfflineEnabled].filter(Boolean).length;
 
     React.useEffect(() => {
-        if (isStripeEnabled) {
+        if (isTapEnabled) {
+            setActivePaymentMethod('TAP');
+        } else if (isStripeEnabled) {
             setActivePaymentMethod('STRIPE');
         } else if (isOfflineEnabled) {
             setActivePaymentMethod('OFFLINE');
         } else {
             setActivePaymentMethod(null);
         }
-    }, [isStripeEnabled, isOfflineEnabled]);
+    }, [isStripeEnabled, isOfflineEnabled, isTapEnabled]);
+
+    // Tap redirects back here with ?tap_id=chg_... The backend re-reads the
+    // charge from Tap; the query string itself proves nothing.
+    const tapId = searchParams.get('tap_id');
+    React.useEffect(() => {
+        if (!tapId || !eventId || !orderShortId) {
+            return;
+        }
+        setIsVerifyingTap(true);
+        orderClientPublic.verifyTapCharge(eventId, orderShortId, tapId)
+            .then(({result}) => {
+                if (result === 'COMPLETED' || result === 'ALREADY_COMPLETED') {
+                    navigate(eventCheckoutPath(eventId, orderShortId, 'summary'), {replace: true});
+                    return;
+                }
+                showError(result === 'REFUNDED'
+                    ? t`Your payment arrived after this order could no longer be completed, so it has been refunded.`
+                    : t`Your payment was not completed. Please try again.`);
+                setSearchParams({}, {replace: true});
+            })
+            .catch(() => showError(t`We could not confirm your payment yet. Please refresh this page in a moment.`))
+            .finally(() => setIsVerifyingTap(false));
+    }, [tapId]);
+
+    const startTapPayment = async () => {
+        setIsPaymentLoading(true);
+        try {
+            const {payment_url} = await orderClientPublic.createTapCharge(eventId, orderShortId);
+            const url = new URL(payment_url);
+            if (url.protocol !== 'https:') {
+                throw new Error('insecure payment url');
+            }
+            // Inside the embedded widget, the payment page must open at top level.
+            if (window.top && window.top !== window.self) {
+                window.open(url.toString(), '_top');
+            } else {
+                window.location.assign(url.toString());
+            }
+        } catch (error: any) {
+            setIsPaymentLoading(false);
+            showError(error?.response?.data?.message || t`Payment could not be started. Please try again.`);
+        }
+    };
 
     React.useEffect(() => {
         window?.scrollTo(0, 0);
@@ -79,7 +129,9 @@ const Payment = () => {
     };
 
     const handleSubmit = async () => {
-        if (activePaymentMethod === 'STRIPE') {
+        if (activePaymentMethod === 'TAP') {
+            await startTapPayment();
+        } else if (activePaymentMethod === 'STRIPE') {
             handleParentSubmit();
         } else if (activePaymentMethod === 'OFFLINE') {
             setIsPaymentLoading(true);
@@ -101,7 +153,7 @@ const Payment = () => {
         }
     };
 
-    if (!isStripeEnabled && !isOfflineEnabled && isOrderFetched) {
+    if (!isStripeEnabled && !isOfflineEnabled && !isTapEnabled && isOrderFetched) {
         return (
             <CheckoutContent>
                 <Card>
@@ -129,28 +181,38 @@ const Payment = () => {
                 {(checkoutEvent && order) && (
                     <InlineOrderSummary event={checkoutEvent} order={order} defaultExpanded={isPaymentLinkPayer}/>
                 )}
-                {(isStripeEnabled && isOfflineEnabled) && (
+                {enabledMethodCount > 1 && (
                     <div className={classes.paymentMethodSelector}>
                         <Text size="sm" c="dimmed" className={classes.paymentMethodLabel}>
                             {t`Payment method`}
                         </Text>
                         <div className={classes.paymentMethodTabs}>
-                            <button
+                            {isTapEnabled && (
+                                <button
+                                    type="button"
+                                    className={`${classes.paymentMethodTab} ${activePaymentMethod === 'TAP' ? classes.active : ''}`}
+                                    onClick={() => setActivePaymentMethod('TAP')}
+                                >
+                                    <IconCreditCard size={18}/>
+                                    <span>{t`Card / BenefitPay`}</span>
+                                </button>
+                            )}
+                            {isStripeEnabled && (<button
                                 type="button"
                                 className={`${classes.paymentMethodTab} ${activePaymentMethod === 'STRIPE' ? classes.active : ''}`}
                                 onClick={() => setActivePaymentMethod('STRIPE')}
                             >
                                 <IconWallet size={18}/>
                                 <span>{t`Pay now`}</span>
-                            </button>
-                            <button
+                            </button>)}
+                            {isOfflineEnabled && (<button
                                 type="button"
                                 className={`${classes.paymentMethodTab} ${activePaymentMethod === 'OFFLINE' ? classes.active : ''}`}
                                 onClick={() => setActivePaymentMethod('OFFLINE')}
                             >
                                 <IconBuildingBank size={18}/>
                                 <span>{t`Pay later`}</span>
-                            </button>
+                            </button>)}
                         </div>
                     </div>
                 )}
@@ -158,6 +220,18 @@ const Payment = () => {
                 {isStripeEnabled && (
                     <div style={{display: activePaymentMethod === 'STRIPE' ? 'block' : 'none'}}>
                         <StripePaymentMethod enabled={true} setSubmitHandler={setSubmitHandler}/>
+                    </div>
+                )}
+
+                {isTapEnabled && (
+                    <div style={{display: activePaymentMethod === 'TAP' ? 'block' : 'none'}}>
+                        <Card>
+                            <Text size="sm">
+                                {isVerifyingTap
+                                    ? t`Confirming your payment...`
+                                    : t`You will be taken to the secure Tap payment page to pay by card, Apple Pay or BenefitPay, then brought back here.`}
+                            </Text>
+                        </Card>
                     </div>
                 )}
 
@@ -170,7 +244,7 @@ const Payment = () => {
                 <div className={classes.checkoutActions}>
                     <Button
                         className={classes.continueButton}
-                        loading={isLoading || isPaymentLoading}
+                        loading={isLoading || isPaymentLoading || isVerifyingTap}
                         onClick={handleSubmit}
                         data-testid={activePaymentMethod === 'OFFLINE' ? 'offline-payment-button' : undefined}
                     >

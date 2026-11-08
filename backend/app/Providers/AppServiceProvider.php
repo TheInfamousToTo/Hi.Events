@@ -119,6 +119,12 @@ class AppServiceProvider extends ServiceProvider
 
     private function bindStripeServices(): void
     {
+        $this->app->singleton(\HiEvents\Services\Infrastructure\Tap\TapClient::class, fn ($app) => new \HiEvents\Services\Infrastructure\Tap\TapClient(
+            http: $app->make(\Illuminate\Http\Client\Factory::class),
+            secretKey: config('services.tap.secret_key'),
+            apiUrl: (string) config('services.tap.api_url'),
+        ));
+
         $this->app->singleton(StripeConfigurationService::class);
         $this->app->singleton(StripeClientFactory::class);
 

@@ -103,6 +103,11 @@ export const PaymentAndInvoicingSettings = () => {
 
     const paymentOptions = [
         {
+            value: "TAP",
+            label: t`Tap Payments`,
+            description: t`Cards, Apple Pay and BenefitPay through Tap (Bahrain and GCC)`
+        },
+        {
             value: "STRIPE",
             label: t`Stripe`,
             description: t`Accept credit card payments with Stripe`

@@ -7,5 +7,5 @@ export const isOfflineOrder = (order: Order): boolean =>
 export const isOrderRefundable = (order: Order): boolean =>
     !order.is_free_order
     && order.status !== 'AWAITING_OFFLINE_PAYMENT'
-    && (order.payment_provider === 'STRIPE' || isOfflineOrder(order))
+    && (order.payment_provider === 'STRIPE' || order.payment_provider === 'TAP' || isOfflineOrder(order))
     && order.refund_status !== 'REFUNDED';

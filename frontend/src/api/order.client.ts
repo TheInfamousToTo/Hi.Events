@@ -157,6 +157,18 @@ export const orderClientPublic = {
         return response.data;
     },
 
+    createTapCharge: async (eventId: IdParam, orderShortId: IdParam) => {
+        const response = await publicApi.post<{ payment_url: string }>(`events/${eventId}/order/${orderShortId}/tap/charge`);
+        return response.data;
+    },
+
+    verifyTapCharge: async (eventId: IdParam, orderShortId: IdParam, tapId: string) => {
+        const response = await publicApi.get<{ result: 'COMPLETED' | 'ALREADY_COMPLETED' | 'NOT_PAID' | 'REFUNDED' }>(
+            `events/${eventId}/order/${orderShortId}/tap/verify`, {params: {tap_id: tapId}}
+        );
+        return response.data;
+    },
+
     finaliseOrder: async (
         eventId: number,
         orderShortId: string,

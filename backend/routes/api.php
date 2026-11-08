@@ -191,6 +191,9 @@ use HiEvents\Http\Actions\CheckInLists\UpdateCheckInListAction;
 use HiEvents\Http\Actions\Common\GetColorThemesAction;
 use HiEvents\Http\Actions\Common\Webhooks\HandleEmailDeliveryWebhookPublicAction;
 use HiEvents\Http\Actions\Common\Webhooks\StripeIncomingWebhookAction;
+use HiEvents\Http\Actions\Common\Webhooks\TapIncomingWebhookAction;
+use HiEvents\Http\Actions\Orders\Payment\Tap\CreateTapChargeActionPublic;
+use HiEvents\Http\Actions\Orders\Payment\Tap\VerifyTapChargeActionPublic;
 use HiEvents\Http\Actions\EmailTemplates\CreateEventEmailTemplateAction;
 use HiEvents\Http\Actions\EmailTemplates\CreateOrganizerEmailTemplateAction;
 use HiEvents\Http\Actions\EmailTemplates\DeleteEventEmailTemplateAction;
@@ -1007,11 +1010,19 @@ $router->prefix('/public')->group(
             ->middleware('throttle:public-payment-intent');
         $router->get('/events/{event_id}/order/{order_short_id}/stripe/payment_intent', GetPaymentIntentActionPublic::class);
 
+        // Tap Payments (hosted payment page)
+        $router->post('/events/{event_id}/order/{order_short_id}/tap/charge', CreateTapChargeActionPublic::class)
+            ->middleware('throttle:public-payment-intent');
+        $router->get('/events/{event_id}/order/{order_short_id}/tap/verify', VerifyTapChargeActionPublic::class)
+            ->middleware('throttle:30,1,public-tap-verify');
+
         // Questions
         $router->get('/events/{event_id}/questions', GetQuestionsPublicAction::class);
 
         // Webhooks
         $router->post('/webhooks/stripe', StripeIncomingWebhookAction::class)
+            ->withoutMiddleware(ThrottleRequests::class.':api');
+        $router->post('/webhooks/tap', TapIncomingWebhookAction::class)
             ->withoutMiddleware(ThrottleRequests::class.':api');
         $router->post('/webhooks/email-delivery/{provider}', HandleEmailDeliveryWebhookPublicAction::class)
             ->withoutMiddleware(ThrottleRequests::class.':api');

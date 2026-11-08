@@ -253,7 +253,8 @@ class CreateEventService
             'get_tickets_button_text' => $terminology->defaultGetTicketsButtonText(),
             'support_email' => $organizer->getEmail(),
 
-            'payment_providers' => [PaymentProviders::STRIPE->value],
+            // Fork: default to Tap when it is configured (Stripe does not onboard Bahrain).
+            'payment_providers' => [config('services.tap.secret_key') ? PaymentProviders::TAP->value : PaymentProviders::STRIPE->value],
             'offline_payment_instructions' => null,
 
             'enable_invoicing' => false,

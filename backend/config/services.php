@@ -33,6 +33,15 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // Tap Payments (Bahrain/GCC): platform-level keys, hosted payment page.
+    'tap' => [
+        'secret_key' => env('TAP_SECRET_KEY'),
+        'api_url' => env('TAP_API_URL', 'https://api.tap.company/v2'),
+        // src_all shows every method enabled on the merchant account
+        // (cards, Apple Pay, BenefitPay, Benefit debit, ...).
+        'source_id' => env('TAP_SOURCE_ID', 'src_all'),
+    ],
+
     'stripe' => [
         'secret_key' => env('STRIPE_SECRET_KEY'),
         'public_key' => env('STRIPE_PUBLIC_KEY'),
