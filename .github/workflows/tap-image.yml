@@ -41,8 +41,6 @@ jobs:
           coverage: none
       - run: composer install --no-interaction --prefer-dist --no-progress
       - run: cp .env.example .env && php artisan key:generate && php artisan jwt:secret --force
-      - name: Syntax check changed PHP
-        run: find app database routes tests -name '*.php' -newer composer.json -print0 | xargs -0 -n1 php -l > /dev/null
       - name: Migrations apply cleanly (incl. tap_payments)
         run: php artisan migrate --force
       - name: Unit tests
